@@ -68,6 +68,7 @@ class Results(Resource):
 # Test
 q = QueryData()
 url = q.get_url('Premier League')
-footballResp = q.get_results(url, '938f39c800744f9dbff8e8948491f65d')
+apikey = ''
+footballResp = q.get_results(url, apikey)
 formattedData = q.format_football_scores(footballResp.content)
 print(formattedData)
