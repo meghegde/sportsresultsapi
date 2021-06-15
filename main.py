@@ -5,7 +5,7 @@ from flask import (
 from flask_restful import Resource, Api
 import requests
 import json
-import logging
+# import logging
 from ratelimit import limits, sleep_and_retry
 
 app = Flask(__name__)
@@ -16,11 +16,19 @@ api = Api(app)
 def home():
     return render_template('home.html')
 
-# Instantiate logger
-logging.getLogger(__name__)
+# # TODO: Change print to logging
+# # Instantiate logger
+# logging.getLogger(__name__)
+# logging.basicConfig(format='%(asctime)s:%(message)s', level=logging.DEBUG)
+
+# For rate limits
+MAX_REQUESTS_PL = 10
+MAX_REQUESTS_NBA = 60
+ONE_MINUTE = 60
 
 
 class ApiHelper:
+    # TODO: make these user inputs
     def __init__(self):
         self.seasonStartYear = '2019'
         self.seasonEndYear = '2020'
@@ -33,26 +41,40 @@ class ApiHelper:
         elif league == 'NBA':
             url = 'https://www.balldontlie.io/api/v1/games?seasons[]='\
                   +self.seasonStartYear+'&per_page='+self.resultsPerPage
-        logging.info('League: {}, Url: {}'.format(league, url))
+        print('League: {}, Url: {}'.format(league, url))
         return url
 
-    def get_results(self, url, apiKey):
-        if apiKey is not None:
-            headers = {'X-Auth-Token': apiKey, 'Content-Type': 'application/json'}
-        else:
-            headers = {'Content-Type': 'application/json'}
+    @sleep_and_retry
+    @limits(calls=MAX_REQUESTS_PL, period=ONE_MINUTE)
+    def get_premier_league_scores(self, apiKey):
+        url = 'https://api.football-data.org/v2/competitions/PL/matches?season=' \
+              + self.seasonStartYear + '&limit=' + self.resultsPerPage
+        print('League: Premier League, Url: {}'.format(url))
+        headers = {'X-Auth-Token': apiKey, 'Content-Type': 'application/json'}
         resp = requests.get(url, headers=headers)
-        logging.info('API Response: status code {}, content: {}'.format(resp.status_code, resp.content))
+        print('API Response: status code {}, content: {}'.format(resp.status_code, resp.content))
+        return resp
+
+    @sleep_and_retry
+    @limits(calls=MAX_REQUESTS_NBA, period=ONE_MINUTE)
+    def get_nba_scores(self):
+        url = 'https://www.balldontlie.io/api/v1/games?seasons[]=' \
+              + self.seasonStartYear + '&per_page=' + self.resultsPerPage
+        print('League: NBA, Url: {}'.format(url))
+        headers = {'Content-Type': 'application/json'}
+        resp = requests.get(url, headers=headers)
+        print('API Response: status code {}, content: {}'.format(resp.status_code, resp.content))
         return resp
 
 
 class DataHandler:
     def format_premier_league_scores(self, data):
-        logging.info('Formatting data.')
+        print('Formatting data.')
         jsonData = json.loads(data)
         matches = jsonData['matches']
         scoresList = []
-        for match in matches:
+
+        def handle_match_data(match):
             matchId = match['id']
             matchDate = match['utcDate']
             homeTeam = match['homeTeam']
@@ -67,20 +89,24 @@ class DataHandler:
             }
             jsonMatchData = json.dumps(matchData)
             scoresList.append(jsonMatchData)
+
+        list(map(handle_match_data, matches))
+
         return scoresList
 
     def format_nba_scores(self, data):
-        logging.info('Formatting data.')
+        print('Formatting data.')
         jsonData = json.loads(data)
         matches = jsonData['data']
         scoresList = []
-        for match in matches:
+
+        def handle_match_data(match):
             matchId = match['id']
             matchDate = match['date']
             homeTeam = match['home_team']['full_name']
             awayTeam = match['visitor_team']['full_name']
             scoreData = {
-                'home_team_score' : match['home_team_score'],
+                'home_team_score': match['home_team_score'],
                 'away_team_score': match['visitor_team_score']
             }
             matchData = {
@@ -92,6 +118,9 @@ class DataHandler:
             }
             jsonMatchData = json.dumps(matchData)
             scoresList.append(jsonMatchData)
+
+        list(map(handle_match_data, matches))
+
         return scoresList
 
 
@@ -99,14 +128,11 @@ class DataHandler:
 # Test
 a = ApiHelper()
 d = DataHandler()
-url = a.get_url('Premier League')
-apikey = '938f39c800744f9dbff8e8948491f65d'
-footballResp = a.get_results(url, apikey)
+apikey = ''
+footballResp = a.get_premier_league_scores(apikey)
 formattedData = d.format_premier_league_scores(footballResp.content)
 print(formattedData)
 
-urlb = a.get_url('NBA')
-print(urlb)
-basketballResp = a.get_results(urlb, None)
+basketballResp = a.get_nba_scores()
 formattedDataB = d.format_nba_scores(basketballResp.content)
 print(formattedDataB)
