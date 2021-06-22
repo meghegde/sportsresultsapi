@@ -5,7 +5,7 @@
 - Go to http://localhost:5000/api/v1/scores/league_id to view scores
     - Premier League: http://localhost:5000/api/v1/scores/PL
     - NBA: http://localhost:5000/api/v1/scores/NBA
-- NB: On line 25 of main.py, you will need to add your own API key
+- NB: On line 25 of get_scores.py, you will need to add your own API key
     - (It would be poor security practice to commit plaintext API key to GitHub)
 
 #### Objectives
