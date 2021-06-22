@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template
 from flask_restful import Resource, Api
 import requests
 import json
@@ -13,15 +13,16 @@ api = Api(app)
 # Homepage
 @app.route('/', methods=['GET'])
 def home():
-    return "<h1>Sports Results API | Home Page</h1>"
+    return render_template('home.html')
 
 
-@app.route('/api/v1/scores', methods=['GET', 'POST'])
-def results():
-    return 'temp'
+@app.route('/api/v1/scores/<league>', methods=['GET'])
+def result(league):
+    apiHelper = ApiHelper()
+    return apiHelper.get_scores(league)
 
 
-# app.run()
+app.run()
 
 
 # # TODO: Change print to logging
@@ -41,13 +42,21 @@ class ApiHelper:
     def __init__(self):
         self.seasonStartYear = '2019'
         self.seasonEndYear = '2020'
-        self.resultsPerPage = '40'
+        self.resultsPerPage = 40
+        self.maxPages = 3
+
+    def get_scores(self, league):
+        if (league == 'NBA'):
+            self.get_nba_scores(self.maxPages)
+        elif (league == 'PL'):
+            # TODO: Add pagination support here
+            self.get_premier_league_scores()
 
     @sleep_and_retry
     @limits(calls=MAX_REQUESTS_PL, period=ONE_MINUTE)
     def get_premier_league_scores(self, apiKey):
         url = 'https://api.football-data.org/v2/competitions/PL/matches?season=' \
-              + self.seasonStartYear + '&limit=' + self.resultsPerPage
+              + self.seasonStartYear + '&limit=' + str(self.resultsPerPage)
         print('League: Premier League, Url: {}'.format(url))
         headers = {'X-Auth-Token': apiKey, 'Content-Type': 'application/json'}
         resp = requests.get(url, headers=headers)
@@ -61,7 +70,7 @@ class ApiHelper:
         d = DataHandler()
         for n in range(1, maxPages):
             url = 'https://www.balldontlie.io/api/v1/games?seasons[]=' \
-                  + self.seasonStartYear + '&per_page=' + self.resultsPerPage + '&page=' + str(n)
+                  + self.seasonStartYear + '&per_page=' + str(self.resultsPerPage) + '&page=' + str(n)
             print('League: NBA, Url: {}'.format(url))
             headers = {'Content-Type': 'application/json'}
             resp = requests.get(url, headers=headers)
@@ -141,5 +150,5 @@ d = DataHandler()
 # formattedData = d.format_premier_league_scores(footballResp.content)
 # print(formattedData)
 
-basketballResp = a.get_nba_scores(3)
-print(basketballResp)
+# basketballResp = a.get_nba_scores(3)
+# print(basketballResp)
