@@ -1,7 +1,4 @@
-from flask import (
-    Flask,
-    render_template
-)
+from flask import Flask
 from flask_restful import Resource, Api
 import requests
 import json
@@ -9,17 +6,29 @@ import json
 from ratelimit import limits, sleep_and_retry
 
 app = Flask(__name__)
+app.config["DEBUG"] = True
 api = Api(app)
 
+
 # Homepage
-@app.route('/')
+@app.route('/', methods=['GET'])
 def home():
-    return render_template('home.html')
+    return "<h1>Sports Results API | Home Page</h1>"
+
+
+@app.route('/api/v1/scores', methods=['GET', 'POST'])
+def results():
+    return 'temp'
+
+
+# app.run()
+
 
 # # TODO: Change print to logging
 # # Instantiate logger
 # logging.getLogger(__name__)
 # logging.basicConfig(format='%(asctime)s:%(message)s', level=logging.DEBUG)
+
 
 # For rate limits
 MAX_REQUESTS_PL = 10
@@ -34,16 +43,6 @@ class ApiHelper:
         self.seasonEndYear = '2020'
         self.resultsPerPage = '40'
 
-    def get_url(self, league):
-        if league == 'Premier League':
-            url = 'https://api.football-data.org/v2/competitions/PL/matches?season='\
-                  +self.seasonStartYear+'&limit='+self.resultsPerPage
-        elif league == 'NBA':
-            url = 'https://www.balldontlie.io/api/v1/games?seasons[]='\
-                  +self.seasonStartYear+'&per_page='+self.resultsPerPage
-        print('League: {}, Url: {}'.format(league, url))
-        return url
-
     @sleep_and_retry
     @limits(calls=MAX_REQUESTS_PL, period=ONE_MINUTE)
     def get_premier_league_scores(self, apiKey):
@@ -57,14 +56,23 @@ class ApiHelper:
 
     @sleep_and_retry
     @limits(calls=MAX_REQUESTS_NBA, period=ONE_MINUTE)
-    def get_nba_scores(self):
-        url = 'https://www.balldontlie.io/api/v1/games?seasons[]=' \
-              + self.seasonStartYear + '&per_page=' + self.resultsPerPage
-        print('League: NBA, Url: {}'.format(url))
-        headers = {'Content-Type': 'application/json'}
-        resp = requests.get(url, headers=headers)
-        print('API Response: status code {}, content: {}'.format(resp.status_code, resp.content))
-        return resp
+    def get_nba_scores(self, maxPages):
+        scoresList = []
+        d = DataHandler()
+        for n in range(1, maxPages):
+            url = 'https://www.balldontlie.io/api/v1/games?seasons[]=' \
+                  + self.seasonStartYear + '&per_page=' + self.resultsPerPage + '&page=' + str(n)
+            print('League: NBA, Url: {}'.format(url))
+            headers = {'Content-Type': 'application/json'}
+            resp = requests.get(url, headers=headers)
+            print('API Response: status code {}, content: {}'.format(resp.status_code, resp.content))
+            # If content is returned, format it and add it to the scores list
+            # If not, break - we've reached the end of the results
+            if (resp.content):
+                scoresList.append(d.format_nba_scores(resp.content))
+            else:
+                break
+        return scoresList
 
 
 class DataHandler:
@@ -128,11 +136,10 @@ class DataHandler:
 # Test
 a = ApiHelper()
 d = DataHandler()
-apikey = ''
-footballResp = a.get_premier_league_scores(apikey)
-formattedData = d.format_premier_league_scores(footballResp.content)
-print(formattedData)
+# apikey = ''
+# footballResp = a.get_premier_league_scores(apikey)
+# formattedData = d.format_premier_league_scores(footballResp.content)
+# print(formattedData)
 
-basketballResp = a.get_nba_scores()
-formattedDataB = d.format_nba_scores(basketballResp.content)
-print(formattedDataB)
+basketballResp = a.get_nba_scores(3)
+print(basketballResp)
